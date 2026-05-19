@@ -8,7 +8,8 @@
 //  for the entire capture flow:
 //
 //      HomeView ─► CameraView ─► PhotoConfirmationView ─► AnalysisLoadingView
-//               ─► IngredientSelectionView ─► (future) RecipeResultsView
+//               ─► IngredientSelectionView ─► RecipeGeneratingView
+//               ─► RecipeCardsView ─► (future) CookingModeView
 //
 //  All push/pop happens through `AppRoute` cases so the path stays
 //  inspectable and reversible. The path itself lives here so children can
@@ -41,6 +42,12 @@ struct SousAIApp: App {
                         IngredientSelectionView(photo: photo,
                                                 detected: detected,
                                                 path: $path)
+                    case .generatingRecipes(let active):
+                        RecipeGeneratingView(activeIngredients: active,
+                                             path: $path)
+                    case .recipeCards(let recipes):
+                        RecipeCardsView(recipes: recipes,
+                                        path: $path)
                     }
                 }
             }

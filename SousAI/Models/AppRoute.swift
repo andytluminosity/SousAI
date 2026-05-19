@@ -38,6 +38,19 @@ enum AppRoute: Hashable {
     /// Rides the original `CapturedPhoto` so a "Retake" pop can reuse it,
     /// and the AI's `[DetectedIngredient]` payload as the initial list.
     case ingredients(CapturedPhoto, [DetectedIngredient])
+
+    /// The "Generating recipes…" loading screen that will host the future
+    /// OpenAI text-completion call. Rides the *active* ingredient list —
+    /// the user's `excluded` selections have already been filtered out by
+    /// `IngredientSelectionView`, so the route payload is exactly what the
+    /// real text model will eventually receive.
+    case generatingRecipes([DetectedIngredient])
+
+    /// The swipeable recipe cards screen — the first "wow moment". Rides
+    /// the `[Recipe]` produced by the loading screen. Each `Recipe` carries
+    /// its `imagePrompt` and, once the future image-gen hook lands, a
+    /// `imageURL` mutated in place by id. See `Recipe.swift` for the seam.
+    case recipeCards([Recipe])
 }
 
 /// A captured `UIImage` paired with a stable identity.

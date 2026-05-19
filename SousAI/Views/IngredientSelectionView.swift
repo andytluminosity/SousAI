@@ -374,11 +374,18 @@ struct IngredientSelectionView: View {
     // MARK: - Navigation actions
 
     private func generateRecipes() {
-        // Until RecipeResultsView lands, the CTA confirms tactilely without
-        // advancing. The medium haptic from PrimaryPillButton already fired;
-        // a quiet success notification confirms the commitment.
+        // PrimaryPillButton already fired a medium impact haptic on tap;
+        // a quiet success notification confirms the commitment before
+        // we push the loading screen.
         let feedback = UINotificationFeedbackGenerator()
         feedback.notificationOccurred(.success)
+
+        // Hand only the *active* (non-excluded) ingredients forward — the
+        // future OpenAI text call will receive exactly this list. Excluded
+        // chips stay visible-but-ghosted on this screen so the user can
+        // come back and toggle without losing pruning.
+        let active = ingredients.filter { !excluded.contains($0.id) }
+        path.append(AppRoute.generatingRecipes(active))
     }
 
     private func retakePhoto() {
