@@ -32,6 +32,12 @@ enum AppRoute: Hashable {
     /// The stub "Analyzing your fridge…" loading screen that will host the
     /// future OpenAI vision call.
     case analyzing(CapturedPhoto)
+
+    /// The interactive refinement screen — the user reviews, toggles, and
+    /// edits the detected ingredient list before recipe generation.
+    /// Rides the original `CapturedPhoto` so a "Retake" pop can reuse it,
+    /// and the AI's `[DetectedIngredient]` payload as the initial list.
+    case ingredients(CapturedPhoto, [DetectedIngredient])
 }
 
 /// A captured `UIImage` paired with a stable identity.

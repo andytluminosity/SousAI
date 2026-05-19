@@ -25,6 +25,10 @@
 		AA0000000000000000010010 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020011 /* CameraView.swift */; };
 		AA0000000000000000010011 /* PhotoConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020012 /* PhotoConfirmationView.swift */; };
 		AA0000000000000000010012 /* AnalysisLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020013 /* AnalysisLoadingView.swift */; };
+		AA0000000000000000010013 /* Ingredient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020014 /* Ingredient.swift */; };
+		AA0000000000000000010014 /* IngredientChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020015 /* IngredientChip.swift */; };
+		AA0000000000000000010015 /* ChipFlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020016 /* ChipFlowLayout.swift */; };
+		AA0000000000000000010016 /* IngredientSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020017 /* IngredientSelectionView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +51,10 @@
 		AA0000000000000000020011 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		AA0000000000000000020012 /* PhotoConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoConfirmationView.swift; sourceTree = "<group>"; };
 		AA0000000000000000020013 /* AnalysisLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisLoadingView.swift; sourceTree = "<group>"; };
+		AA0000000000000000020014 /* Ingredient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ingredient.swift; sourceTree = "<group>"; };
+		AA0000000000000000020015 /* IngredientChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngredientChip.swift; sourceTree = "<group>"; };
+		AA0000000000000000020016 /* ChipFlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipFlowLayout.swift; sourceTree = "<group>"; };
+		AA0000000000000000020017 /* IngredientSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngredientSelectionView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,6 +110,8 @@
 				AA000000000000000002000D /* PressStyle.swift */,
 				AA0000000000000000020010 /* ViewfinderFrame.swift */,
 				AA0000000000000000020004 /* AmbientBackground.swift */,
+				AA0000000000000000020015 /* IngredientChip.swift */,
+				AA0000000000000000020016 /* ChipFlowLayout.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -113,6 +123,7 @@
 				AA0000000000000000020011 /* CameraView.swift */,
 				AA0000000000000000020012 /* PhotoConfirmationView.swift */,
 				AA0000000000000000020013 /* AnalysisLoadingView.swift */,
+				AA0000000000000000020017 /* IngredientSelectionView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -121,6 +132,7 @@
 			isa = PBXGroup;
 			children = (
 				AA000000000000000002000C /* AppRoute.swift */,
+				AA0000000000000000020014 /* Ingredient.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -227,6 +239,10 @@
 				AA0000000000000000010010 /* CameraView.swift in Sources */,
 				AA0000000000000000010011 /* PhotoConfirmationView.swift in Sources */,
 				AA0000000000000000010012 /* AnalysisLoadingView.swift in Sources */,
+				AA0000000000000000010013 /* Ingredient.swift in Sources */,
+				AA0000000000000000010014 /* IngredientChip.swift in Sources */,
+				AA0000000000000000010015 /* ChipFlowLayout.swift in Sources */,
+				AA0000000000000000010016 /* IngredientSelectionView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -8,10 +8,12 @@
 //  for the entire capture flow:
 //
 //      HomeView ─► CameraView ─► PhotoConfirmationView ─► AnalysisLoadingView
+//               ─► IngredientSelectionView ─► (future) RecipeResultsView
 //
 //  All push/pop happens through `AppRoute` cases so the path stays
 //  inspectable and reversible. The path itself lives here so children can
-//  reset it (e.g. PhotoConfirmationView's close X clears back to Home).
+//  reset it (e.g. PhotoConfirmationView's close X clears back to Home,
+//  IngredientSelectionView's "Retake Photo" pops back to CameraView).
 //
 
 import SwiftUI
@@ -35,6 +37,10 @@ struct SousAIApp: App {
                         PhotoConfirmationView(photo: photo, path: $path)
                     case .analyzing(let photo):
                         AnalysisLoadingView(photo: photo, path: $path)
+                    case .ingredients(let photo, let detected):
+                        IngredientSelectionView(photo: photo,
+                                                detected: detected,
+                                                path: $path)
                     }
                 }
             }

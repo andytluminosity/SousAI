@@ -20,6 +20,14 @@
 //      back to PhotoConfirmationView (not all the way home), so the user
 //      keeps their captured photo and can simply re-confirm or retake.
 //
+//  Stubbed handoff:
+//    • After ~2.4s of "thinking", the screen pushes `.ingredients(...)` onto
+//      the path with the `DetectedIngredient.sampleFridge` fixture. This is
+//      the exact site the real OpenAI vision call will replace — destination
+//      and payload shape stay identical; only the source flips from fixture
+//      to network. The advance Task is cancelled on `.onDisappear` so a
+//      mid-flight Cancel tap never re-pushes us into Ingredients.
+//
 
 import SwiftUI
 
@@ -29,6 +37,11 @@ struct AnalysisLoadingView: View {
     @Binding var path: NavigationPath
 
     @State private var pulse = false
+    @State private var advanceTask: Task<Void, Never>?
+
+    /// Stub latency before we land on the ingredient screen. Replace by the
+    /// real OpenAI vision call's resolution time when wired in.
+    private let stubAnalysisDuration: Duration = .milliseconds(2400)
 
     var body: some View {
         ZStack {
@@ -53,6 +66,7 @@ struct AnalysisLoadingView: View {
                 Spacer()
 
                 SecondaryGhostButton("Cancel") {
+                    advanceTask?.cancel()
                     if !path.isEmpty { path.removeLast() }
                 }
                 .padding(.bottom, AppSpacing.xl)
@@ -65,6 +79,28 @@ struct AnalysisLoadingView: View {
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 pulse = true
             }
+            scheduleAdvance()
+        }
+        .onDisappear {
+            advanceTask?.cancel()
+            advanceTask = nil
+        }
+    }
+
+    // MARK: - Stubbed handoff
+
+    private func scheduleAdvance() {
+        // Guard against `.onAppear` re-fires (e.g. returning to this screen
+        // from a downstream pop). The Task is the single source of truth for
+        // "an advance is pending".
+        guard advanceTask == nil else { return }
+
+        advanceTask = Task { @MainActor in
+            try? await Task.sleep(for: stubAnalysisDuration)
+            guard !Task.isCancelled else { return }
+            path.append(
+                AppRoute.ingredients(photo, DetectedIngredient.sampleFridge)
+            )
         }
     }
 
