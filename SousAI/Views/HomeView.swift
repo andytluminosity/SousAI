@@ -71,6 +71,8 @@ struct HomeView: View {
         .background(AmbientBackground())
         .preferredColorScheme(.dark)
         .statusBarHidden(false)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear(perform: animateEntrance)
     }
 

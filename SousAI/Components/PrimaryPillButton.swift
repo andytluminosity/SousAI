@@ -52,7 +52,7 @@ struct PrimaryPillButton: View {
             )
             .contentShape(Capsule())
         }
-        .buttonStyle(PillPressStyle())
+        .buttonStyle(AppPressStyle())
         .accessibilityLabel(Text(title))
     }
 
@@ -60,21 +60,6 @@ struct PrimaryPillButton: View {
         let feedback = UIImpactFeedbackGenerator(style: .medium)
         feedback.impactOccurred()
         action()
-    }
-}
-
-// MARK: - Press style
-
-/// Honors DESIGN.md's `transform: scale(0.95)` press signal across every button
-/// in the system. Spring response is intentionally short so the rebound feels
-/// crisp rather than playful.
-private struct PillPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .opacity(configuration.isPressed ? 0.92 : 1.0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.7),
-                       value: configuration.isPressed)
     }
 }
 

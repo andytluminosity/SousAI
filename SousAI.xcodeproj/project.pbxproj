@@ -17,6 +17,14 @@
 		AA0000000000000000010008 /* AppRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020008 /* AppRadius.swift */; };
 		AA0000000000000000010009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020009 /* Assets.xcassets */; };
 		AA000000000000000001000A /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000002000A /* Preview Assets.xcassets */; };
+		AA000000000000000001000B /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000002000C /* AppRoute.swift */; };
+		AA000000000000000001000C /* PressStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000002000D /* PressStyle.swift */; };
+		AA000000000000000001000D /* CircularIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000002000E /* CircularIconButton.swift */; };
+		AA000000000000000001000E /* SecondaryGhostButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000002000F /* SecondaryGhostButton.swift */; };
+		AA000000000000000001000F /* ViewfinderFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020010 /* ViewfinderFrame.swift */; };
+		AA0000000000000000010010 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020011 /* CameraView.swift */; };
+		AA0000000000000000010011 /* PhotoConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020012 /* PhotoConfirmationView.swift */; };
+		AA0000000000000000010012 /* AnalysisLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000020013 /* AnalysisLoadingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +39,14 @@
 		AA0000000000000000020009 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA000000000000000002000A /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		AA000000000000000002000B /* SousAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SousAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000000000000000002000C /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
+		AA000000000000000002000D /* PressStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressStyle.swift; sourceTree = "<group>"; };
+		AA000000000000000002000E /* CircularIconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularIconButton.swift; sourceTree = "<group>"; };
+		AA000000000000000002000F /* SecondaryGhostButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondaryGhostButton.swift; sourceTree = "<group>"; };
+		AA0000000000000000020010 /* ViewfinderFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewfinderFrame.swift; sourceTree = "<group>"; };
+		AA0000000000000000020011 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
+		AA0000000000000000020012 /* PhotoConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoConfirmationView.swift; sourceTree = "<group>"; };
+		AA0000000000000000020013 /* AnalysisLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisLoadingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +74,7 @@
 				AA0000000000000000020001 /* SousAIApp.swift */,
 				AA0000000000000000030005 /* Views */,
 				AA0000000000000000030004 /* Components */,
+				AA0000000000000000030008 /* Models */,
 				AA0000000000000000030003 /* DesignSystem */,
 				AA0000000000000000020009 /* Assets.xcassets */,
 				AA0000000000000000030006 /* Preview Content */,
@@ -80,6 +97,10 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000020003 /* PrimaryPillButton.swift */,
+				AA000000000000000002000F /* SecondaryGhostButton.swift */,
+				AA000000000000000002000E /* CircularIconButton.swift */,
+				AA000000000000000002000D /* PressStyle.swift */,
+				AA0000000000000000020010 /* ViewfinderFrame.swift */,
 				AA0000000000000000020004 /* AmbientBackground.swift */,
 			);
 			path = Components;
@@ -89,8 +110,19 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000020002 /* HomeView.swift */,
+				AA0000000000000000020011 /* CameraView.swift */,
+				AA0000000000000000020012 /* PhotoConfirmationView.swift */,
+				AA0000000000000000020013 /* AnalysisLoadingView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000030008 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000002000C /* AppRoute.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000030006 /* Preview Content */ = {
@@ -187,6 +219,14 @@
 				AA0000000000000000010007 /* AppSpacing.swift in Sources */,
 				AA0000000000000000010008 /* AppRadius.swift in Sources */,
 				AA0000000000000000010001 /* SousAIApp.swift in Sources */,
+				AA000000000000000001000B /* AppRoute.swift in Sources */,
+				AA000000000000000001000C /* PressStyle.swift in Sources */,
+				AA000000000000000001000D /* CircularIconButton.swift in Sources */,
+				AA000000000000000001000E /* SecondaryGhostButton.swift in Sources */,
+				AA000000000000000001000F /* ViewfinderFrame.swift in Sources */,
+				AA0000000000000000010010 /* CameraView.swift in Sources */,
+				AA0000000000000000010011 /* PhotoConfirmationView.swift in Sources */,
+				AA0000000000000000010012 /* AnalysisLoadingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -317,6 +357,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"SousAI/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SousAI uses your camera to scan ingredients in your fridge.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "SousAI uses your photo library so you can scan an existing fridge photo.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -345,6 +387,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"SousAI/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SousAI uses your camera to scan ingredients in your fridge.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "SousAI uses your photo library so you can scan an existing fridge photo.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
