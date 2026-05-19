@@ -38,14 +38,15 @@
 //      placeholder is the ship state. The seam is exercised the moment
 //      we write the image client.
 //
-//  Start Cooking is the future CookingModeView seam — fires a medium
-//  haptic (via PrimaryPillButton) and otherwise no-ops, matching the
-//  posture IngredientSelectionView.generateRecipes() had before it was
-//  wired through.
+//  Start Cooking is the live CookingModeView seam — `handleStartCooking`
+//  pushes `AppRoute.cookingMode(recipe)` onto the path, carrying the
+//  exact `Recipe` instance the tapped card was bound to (the per-card
+//  closure captures the recipe out of the enumerated ForEach, so it's
+//  always the page the user is currently viewing). The medium impact
+//  haptic comes from PrimaryPillButton itself; we don't double-fire.
 //
 
 import SwiftUI
-import UIKit
 
 struct RecipeCardsView: View {
 
@@ -265,11 +266,13 @@ struct RecipeCardsView: View {
     // MARK: - Actions
 
     private func handleStartCooking(_ recipe: Recipe) {
-        // Future CookingModeView seam. PrimaryPillButton already fires a
-        // medium impact haptic on tap; a quiet success notification
-        // confirms the commitment until the next screen exists.
-        let feedback = UINotificationFeedbackGenerator()
-        feedback.notificationOccurred(.success)
+        // Pushes the cooking mode screen with the exact recipe the user
+        // tapped. The per-card closure in `pager(_:)` captures `recipe`
+        // out of the enumerated ForEach, so this is always the page the
+        // user is currently viewing — no `selection` lookup needed.
+        // PrimaryPillButton already fires a medium impact haptic on tap,
+        // so we don't fire another here.
+        path.append(AppRoute.cookingMode(recipe))
     }
 
     // MARK: - Entrance

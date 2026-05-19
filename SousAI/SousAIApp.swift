@@ -9,7 +9,7 @@
 //
 //      HomeView ─► CameraView ─► PhotoConfirmationView ─► AnalysisLoadingView
 //               ─► IngredientSelectionView ─► RecipeGeneratingView
-//               ─► RecipeCardsView ─► (future) CookingModeView
+//               ─► RecipeCardsView ─► CookingModeView
 //
 //  All push/pop happens through `AppRoute` cases so the path stays
 //  inspectable and reversible. The path itself lives here so children can
@@ -47,6 +47,9 @@ struct SousAIApp: App {
                                              path: $path)
                     case .recipeCards(let recipes):
                         RecipeCardsView(recipes: recipes,
+                                        path: $path)
+                    case .cookingMode(let recipe):
+                        CookingModeView(recipe: recipe,
                                         path: $path)
                     }
                 }

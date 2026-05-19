@@ -51,6 +51,13 @@ enum AppRoute: Hashable {
     /// its `imagePrompt` and, once the future image-gen hook lands, a
     /// `imageURL` mutated in place by id. See `Recipe.swift` for the seam.
     case recipeCards([Recipe])
+
+    /// The guided step-by-step cooking screen. Rides the *single* `Recipe`
+    /// the user committed to when they tapped "Start Cooking" on its card
+    /// — passed by value, not looked up by id. The screen is a pure
+    /// projection of this payload, so popping the stack returns the user
+    /// to the same page in the pager with no state to reconcile.
+    case cookingMode(Recipe)
 }
 
 /// A captured `UIImage` paired with a stable identity.
