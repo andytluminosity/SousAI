@@ -347,13 +347,14 @@ struct IngredientSelectionView: View {
         let feedback = UIImpactFeedbackGenerator(style: .light)
         feedback.impactOccurred()
 
-        // User-added ingredient — `emoji` is intentionally `nil` here.
+        // User-added ingredient — `emoji` is intentionally `nil` at insert.
         // We do NOT guess client-side: keyword matching produces incorrect
         // glyphs on typos, composed phrases, and non-English input. The
-        // OpenAI enrichment call (future) will populate `emoji` on this
-        // item in place, matched by `id`. Until then, the chip renders
-        // name-only — which is honest about what we know.
+        // OpenAI enrichment task below populates `emoji` on this item in
+        // place, matched by `id`. If the call fails we leave the chip
+        // name-only — honest about what we know.
         let newItem = DetectedIngredient(name: trimmed, emoji: nil)
+        let newId = newItem.id
 
         withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
             ingredients.append(newItem)
@@ -361,6 +362,24 @@ struct IngredientSelectionView: View {
             newIngredientText = ""
         }
         addFieldFocused = false
+
+        enrichEmoji(for: trimmed, itemId: newId)
+    }
+
+    /// Fires the OpenAI emoji call in the background and patches the
+    /// matching ingredient's `emoji` in place once it returns. Errors are
+    /// intentionally swallowed — the chip simply stays name-only.
+    private func enrichEmoji(for name: String, itemId: UUID) {
+        Task { @MainActor in
+            guard let emoji = try? await OpenAIIngredientService.shared
+                .emoji(for: name) else { return }
+            guard let idx = ingredients.firstIndex(where: { $0.id == itemId }) else {
+                return
+            }
+            withAnimation(.easeOut(duration: 0.25)) {
+                ingredients[idx].emoji = emoji
+            }
+        }
     }
 
     private func cancelAdd() {

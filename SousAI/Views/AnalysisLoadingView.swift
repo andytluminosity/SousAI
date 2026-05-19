@@ -2,11 +2,12 @@
 //  AnalysisLoadingView.swift
 //  SousAI
 //
-//  The stub "Analyzing your fridge…" screen.
+//  The "Analyzing your fridge…" screen.
 //
-//  This is the future home of the OpenAI vision call. For now it exists so
-//  the navigation flow is wired end-to-end and the user lands somewhere
-//  honest after tapping "Use This Photo".
+//  This is the host of the OpenAI vision call. The screen owns the
+//  in-flight Task, the cancel/retry affordances, and the error surface.
+//  Successful completion pushes `.ingredients(photo, detected)` and pops
+//  itself out of the user's mental model — the path is what survives.
 //
 //  Design intent:
 //    • Re-uses the hero's `AmbientBackground` — keeps brand continuity with
@@ -14,19 +15,14 @@
 //      we're no longer in the "photographic capture" context.
 //    • A single quiet question in `displayMedium`, then three pulsing dots
 //      instead of a spinner. Spinners feel transactional; dots feel patient.
-//    • A single quiet "Cancel" affordance — restrained ghost capsule in the
-//      same bottom CTA zone the confirmation view uses, so the layout rhythm
-//      across the flow stays consistent. Tapping it pops the stack one step
-//      back to PhotoConfirmationView (not all the way home), so the user
-//      keeps their captured photo and can simply re-confirm or retake.
+//    • When the network call fails the dots are swapped for a short,
+//      humane error line and the CTA cluster becomes Retry + Cancel.
+//      No alert sheets, no scary modal — failure stays inside the same
+//      composition the user is already looking at.
 //
-//  Stubbed handoff:
-//    • After ~2.4s of "thinking", the screen pushes `.ingredients(...)` onto
-//      the path with the `DetectedIngredient.sampleFridge` fixture. This is
-//      the exact site the real OpenAI vision call will replace — destination
-//      and payload shape stay identical; only the source flips from fixture
-//      to network. The advance Task is cancelled on `.onDisappear` so a
-//      mid-flight Cancel tap never re-pushes us into Ingredients.
+//  Cancel semantics: pops one entry off the stack — back to
+//  PhotoConfirmationView, with the captured photo intact, so the user
+//  can simply re-confirm or retake without losing their photo.
 //
 
 import SwiftUI
@@ -38,10 +34,7 @@ struct AnalysisLoadingView: View {
 
     @State private var pulse = false
     @State private var advanceTask: Task<Void, Never>?
-
-    /// Stub latency before we land on the ingredient screen. Replace by the
-    /// real OpenAI vision call's resolution time when wired in.
-    private let stubAnalysisDuration: Duration = .milliseconds(2400)
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack {
@@ -51,7 +44,7 @@ struct AnalysisLoadingView: View {
                 Spacer()
 
                 VStack(spacing: AppSpacing.xl) {
-                    Text("Analyzing your fridge…")
+                    Text(headlineText)
                         .font(AppTypography.displayMedium)
                         .tracking(AppTypography.displayMediumTracking)
                         .foregroundColor(AppColor.bodyOnDark)
@@ -60,16 +53,25 @@ struct AnalysisLoadingView: View {
                         .minimumScaleFactor(0.7)
                         .padding(.horizontal, AppSpacing.lg)
 
-                    pulsingDots
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(AppTypography.body)
+                            .tracking(AppTypography.bodyTracking)
+                            .foregroundColor(AppColor.bodyMuted.opacity(0.78))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(4)
+                            .minimumScaleFactor(0.85)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, AppSpacing.lg)
+                    } else {
+                        pulsingDots
+                    }
                 }
 
                 Spacer()
 
-                SecondaryGhostButton("Cancel") {
-                    advanceTask?.cancel()
-                    if !path.isEmpty { path.removeLast() }
-                }
-                .padding(.bottom, AppSpacing.xl)
+                ctaCluster
+                    .padding(.bottom, AppSpacing.xl)
             }
         }
         .preferredColorScheme(.dark)
@@ -87,21 +89,75 @@ struct AnalysisLoadingView: View {
         }
     }
 
-    // MARK: - Stubbed handoff
+    // MARK: - Headline + CTA
+
+    private var headlineText: String {
+        errorMessage == nil ? "Analyzing your fridge…" : "Something went wrong"
+    }
+
+    @ViewBuilder
+    private var ctaCluster: some View {
+        if errorMessage != nil {
+            VStack(spacing: AppSpacing.sm) {
+                PrimaryPillButton("Try Again",
+                                  icon: "arrow.clockwise",
+                                  action: retry)
+                SecondaryGhostButton("Cancel", action: cancel)
+            }
+        } else {
+            SecondaryGhostButton("Cancel", action: cancel)
+        }
+    }
+
+    // MARK: - Real handoff
 
     private func scheduleAdvance() {
         // Guard against `.onAppear` re-fires (e.g. returning to this screen
         // from a downstream pop). The Task is the single source of truth for
-        // "an advance is pending".
+        // "an analysis is pending".
         guard advanceTask == nil else { return }
 
         advanceTask = Task { @MainActor in
-            try? await Task.sleep(for: stubAnalysisDuration)
-            guard !Task.isCancelled else { return }
-            path.append(
-                AppRoute.ingredients(photo, DetectedIngredient.sampleFridge)
-            )
+            do {
+                let detected = try await OpenAIIngredientService.shared
+                    .analyzeFridge(photo: photo.image)
+                guard !Task.isCancelled else { return }
+                path.append(AppRoute.ingredients(photo, detected))
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = Self.friendlyMessage(for: error)
+                advanceTask = nil
+            }
         }
+    }
+
+    private func retry() {
+        errorMessage = nil
+        advanceTask?.cancel()
+        advanceTask = nil
+        scheduleAdvance()
+    }
+
+    private func cancel() {
+        advanceTask?.cancel()
+        advanceTask = nil
+        if !path.isEmpty { path.removeLast() }
+    }
+
+    private static func friendlyMessage(for error: Error) -> String {
+        if let openAI = error as? OpenAIError {
+            switch openAI {
+            case .missingKey:
+                return "OpenAI API key isn't set. Add it to .env and try again."
+            case .transport:
+                return "We couldn't reach OpenAI. Check your connection and try again."
+            case .http(let status, _):
+                return "OpenAI returned an error (status \(status)). Please try again."
+            case .emptyResponse, .decoding, .invalidPayload:
+                return "We couldn't read the response. Please try again."
+            }
+        }
+        return "Something went wrong. Please try again."
     }
 
     private var pulsingDots: some View {

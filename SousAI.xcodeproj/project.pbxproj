@@ -52,6 +52,22 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		AA000000000000000003000A /* Services */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {};
+			explicitFolders = (
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AA000000000000000003000B /* Resources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {};
+			explicitFolders = (
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,7 +96,9 @@
 				AA0000000000000000030005 /* Views */,
 				AA0000000000000000030004 /* Components */,
 				AA0000000000000000030008 /* Models */,
+				AA000000000000000003000A /* Services */,
 				AA0000000000000000030003 /* DesignSystem */,
+				AA000000000000000003000B /* Resources */,
 				AA0000000000000000020009 /* Assets.xcassets */,
 				AA0000000000000000030006 /* Preview Content */,
 			);
@@ -110,6 +128,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = AA0000000000000000060006 /* Build configuration list for PBXNativeTarget "SousAI" */;
 			buildPhases = (
+				AA0000000000000000040004 /* Sync .env into bundle */,
 				AA0000000000000000040001 /* Sources */,
 				AA0000000000000000040002 /* Frameworks */,
 				AA0000000000000000040003 /* Resources */,
@@ -122,7 +141,9 @@
 				AA0000000000000000030005 /* Views */,
 				AA0000000000000000030004 /* Components */,
 				AA0000000000000000030008 /* Models */,
+				AA000000000000000003000A /* Services */,
 				AA0000000000000000030003 /* DesignSystem */,
+				AA000000000000000003000B /* Resources */,
 			);
 			name = SousAI;
 			productName = SousAI;
@@ -161,6 +182,28 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA0000000000000000040004 /* Sync .env into bundle */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Sync .env into bundle";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Auto-sync the project-root .env into the bundled resources copy so\n# developers only ever edit one file. The bundled copy is what ships in\n# SousAI.app and is what Secrets.swift reads at runtime.\nset -eu\nSRC=\"${SRCROOT}/.env\"\nDST=\"${SRCROOT}/SousAI/Resources/.env\"\nmkdir -p \"$(dirname \"$DST\")\"\nif [ -f \"$SRC\" ]; then\n  if [ ! -f \"$DST\" ] || ! cmp -s \"$SRC\" \"$DST\"; then\n    cp \"$SRC\" \"$DST\"\n    echo \"note: synced .env -> SousAI/Resources/.env\"\n  fi\nelse\n  echo \"warning: $SRC not found; SousAI/Resources/.env will be used as-is\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		AA0000000000000000040003 /* Resources */ = {

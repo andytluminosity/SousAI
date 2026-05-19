@@ -177,7 +177,7 @@ struct RecipeCardsView: View {
         HStack(alignment: .center) {
             CircularIconButton(systemName: "chevron.left",
                                accessibilityLabel: "Back to ingredients") {
-                if !path.isEmpty { path.removeLast() }
+                if !path.isEmpty { path.removeLast(); path.removeLast() }
             }
 
             Text("RECIPES")
