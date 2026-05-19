@@ -28,15 +28,30 @@
 //      the flow (eyebrow → headline → cards → indicator). The cards
 //      themselves fade in with a 14pt upward slide.
 //
-//  Image-enrichment seam:
-//    • `recipes` is `@State`, not `let`. When the OpenAI image-gen hook
-//      lands, it will be fired from `onAppear` and write each resolved
-//      URL into `recipes[i].imageURL` (matched by `id`). SwiftUI re-
+//  Image-enrichment (live):
+//    • `recipes` is `@State` so `enrichImages()` can write each resolved
+//      URL into `recipes[i].imageURL` (matched by `id`). One DALL-E 2
+//      call per recipe fires in parallel from `onAppear`; SwiftUI re-
 //      renders just the affected card via `RecipeDishImage`'s state
 //      switch — no plumbing through `RecipeCardsView` or `RecipeCard`.
-//    • Today's mock flow leaves `imageURL` nil for every recipe; the
-//      placeholder is the ship state. The seam is exercised the moment
-//      we write the image client.
+//    • Failures are intentionally swallowed: the per-card placeholder
+//      (emoji on `surfaceTile3`) is a perfectly good ship state — see
+//      `RecipeDishImage`'s file header.
+//
+//  Generate More (live):
+//    • A trailing card in the pager invites the user to keep ideas
+//      coming. Its content is state-driven (idle → loading → error).
+//    • On tap, `handleGenerateMore` re-calls
+//      `OpenAIRecipeService.generateRecipes(from:excluding:)` with the
+//      original active ingredients plus the current recipes' titles as
+//      the exclusion list — the model is asked to be substantively
+//      different. A defensive lowercased-title filter runs at the call
+//      site before appending, in case the model echoes a restatement.
+//    • After append, `selection` jumps to the index of the first new
+//      recipe so the user lands on the freshly-arrived card rather
+//      than being stranded on the (now-shifted) extension card.
+//      `enrichImages()` is then re-run so the new entries' previews
+//      develop in too.
 //
 //  Start Cooking is the live CookingModeView seam — `handleStartCooking`
 //  pushes `AppRoute.cookingMode(recipe)` onto the path, carrying the
@@ -52,14 +67,31 @@ struct RecipeCardsView: View {
 
     // MARK: - Inputs
 
+    /// The original active ingredient list used to seed the text-completion
+    /// call. Carried on this screen so the trailing "Generate More" card
+    /// can re-call the recipe service with the same ingredients plus an
+    /// exclusion list of titles we've already shown. See
+    /// `handleGenerateMore`.
+    let activeIngredients: [DetectedIngredient]
+
     @Binding var path: NavigationPath
 
     // MARK: - State
 
-    /// Mutable so the future image-enrichment hook can write URLs in
-    /// place by id. See the file header.
+    /// Mutable so the image-enrichment hook can write URLs in place by id
+    /// (see `enrichImages`), and so "Generate More" can append fresh
+    /// non-duplicate recipes (see `handleGenerateMore`).
     @State private var recipes: [Recipe]
     @State private var selection: Int = 0
+
+    /// One outstanding image-generation Task per recipe id. Keyed by id
+    /// so the gate `imageTasks[recipe.id] == nil` makes `enrichImages()`
+    /// idempotent — it can be safely re-run after a Generate More append.
+    @State private var imageTasks: [UUID: Task<Void, Never>] = [:]
+
+    /// State for the trailing "Generate More" card.
+    @State private var moreState: GenerateMoreState = .idle
+    @State private var moreTask: Task<Void, Never>?
 
     // Note: there is intentionally no `eyebrowVisible` state. The topBar
     // renders statically at full opacity from the first frame and is
@@ -75,7 +107,10 @@ struct RecipeCardsView: View {
 
     // MARK: - Init
 
-    init(recipes: [Recipe], path: Binding<NavigationPath>) {
+    init(activeIngredients: [DetectedIngredient],
+         recipes: [Recipe],
+         path: Binding<NavigationPath>) {
+        self.activeIngredients = activeIngredients
         self._recipes = State(initialValue: recipes)
         self._path = path
     }
@@ -168,7 +203,16 @@ struct RecipeCardsView: View {
         .preferredColorScheme(.dark)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear(perform: animateEntrance)
+        .onAppear {
+            animateEntrance()
+            enrichImages()
+        }
+        .onDisappear {
+            for task in imageTasks.values { task.cancel() }
+            imageTasks.removeAll()
+            moreTask?.cancel()
+            moreTask = nil
+        }
     }
 
     // MARK: - Top bar
@@ -226,6 +270,13 @@ struct RecipeCardsView: View {
         // to-edge. We use horizontal padding inside each tab page rather
         // than on the TabView itself so the gesture catchment stays full
         // width.
+        //
+        // The trailing `GenerateMoreCard` lives inside the same TabView
+        // so the user reaches it with the same swipe gesture they're
+        // already using. Its tag is `recipes.count` — when more recipes
+        // are appended, the extension card's tag naturally moves
+        // forward and `handleGenerateMore` re-aims `selection` at the
+        // first new recipe.
         TabView(selection: $selection) {
             ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
                 RecipeCard(recipe: recipe) { _ in
@@ -235,6 +286,11 @@ struct RecipeCardsView: View {
                 .padding(.vertical, AppSpacing.xxs)
                 .tag(index)
             }
+
+            GenerateMoreCard(state: moreState, onGenerate: handleGenerateMore)
+                .padding(.horizontal, m.gutter * 0.6)
+                .padding(.vertical, AppSpacing.xxs)
+                .tag(recipes.count)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         // No `.frame(height:)` — the parent VStack hands the TabView a
@@ -246,8 +302,14 @@ struct RecipeCardsView: View {
     // MARK: - Indicator
 
     private var indicator: some View {
-        HStack(spacing: 6) {
-            ForEach(recipes.indices, id: \.self) { index in
+        // Total page count includes the trailing Generate More card.
+        // We treat that card as a real page in the indicator — it IS a
+        // page the user can land on — so the rightmost dot tracks the
+        // extension card with the same active treatment as the recipe
+        // dots.
+        let totalPages = recipes.count + 1
+        return HStack(spacing: 6) {
+            ForEach(0..<totalPages, id: \.self) { index in
                 let isActive = index == selection
                 Capsule(style: .continuous)
                     .fill(isActive
@@ -260,7 +322,7 @@ struct RecipeCardsView: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Page \(selection + 1) of \(recipes.count)"))
+        .accessibilityLabel(Text("Page \(selection + 1) of \(totalPages)"))
     }
 
     // MARK: - Actions
@@ -273,6 +335,115 @@ struct RecipeCardsView: View {
         // PrimaryPillButton already fires a medium impact haptic on tap,
         // so we don't fire another here.
         path.append(AppRoute.cookingMode(recipe))
+    }
+
+    // MARK: - Image enrichment
+
+    /// Fires one DALL-E 2 image-generation Task per recipe that has an
+    /// `imagePrompt` and no `imageURL` yet. The Tasks run in parallel;
+    /// each writes its result into `recipes[i].imageURL` (matched by id)
+    /// so SwiftUI re-renders only the affected card via the AsyncImage
+    /// in `RecipeDishImage`. The placeholder underneath fades out as
+    /// the image fades in (see `RecipeDishImage.body`).
+    ///
+    /// Idempotent: the `imageTasks[recipe.id] == nil` gate means this
+    /// can be safely re-run after a Generate More append — only the
+    /// new recipes get fresh tasks.
+    ///
+    /// Errors are intentionally swallowed: the per-card placeholder is
+    /// a perfectly good ship state.
+    private func enrichImages() {
+        for recipe in recipes {
+            guard let prompt = recipe.imagePrompt,
+                  recipe.imageURL == nil,
+                  imageTasks[recipe.id] == nil else { continue }
+            let recipeId = recipe.id
+            imageTasks[recipeId] = Task { @MainActor in
+                guard let url = try? await OpenAIRecipeService.shared
+                    .generateImage(forPrompt: prompt) else { return }
+                guard !Task.isCancelled else { return }
+                guard let idx = recipes.firstIndex(where: { $0.id == recipeId }) else {
+                    return
+                }
+                withAnimation(.easeOut(duration: 0.45)) {
+                    recipes[idx].imageURL = url
+                }
+            }
+        }
+    }
+
+    // MARK: - Generate More
+
+    /// Asks the recipe service for 4 more recipes, passing the current
+    /// titles as the exclusion list so the model is steered away from
+    /// duplicates. A defensive lowercased-title dedupe runs on the
+    /// response before appending (the prompt is the first defence; this
+    /// is the second). On success, `selection` jumps to the index of
+    /// the first new recipe and `enrichImages()` is re-run so the new
+    /// previews develop in.
+    private func handleGenerateMore() {
+        guard moreTask == nil else { return }
+        moreState = .loading
+        moreTask = Task { @MainActor in
+            do {
+                let new = try await OpenAIRecipeService.shared.generateRecipes(
+                    from: activeIngredients,
+                    excluding: recipes.map(\.title)
+                )
+                guard !Task.isCancelled else { return }
+
+                let existingLower = Set(recipes.map { $0.title.lowercased() })
+                let deduped = new.filter {
+                    !existingLower.contains($0.title.lowercased())
+                }
+
+                guard !deduped.isEmpty else {
+                    // Every returned recipe was a restatement of something
+                    // we already showed. We don't auto-retry (keeps cost
+                    // predictable) — instead, be honest that the well is
+                    // dry and nudge toward changing the ingredient list.
+                    moreState = .error(
+                        "We're out of fresh ideas for this list. Try going back and adjusting your ingredients."
+                    )
+                    moreTask = nil
+                    return
+                }
+
+                let firstNewIndex = recipes.count
+                withAnimation(.easeOut(duration: 0.45)) {
+                    recipes.append(contentsOf: deduped)
+                }
+                moreState = .idle
+                moreTask = nil
+
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                    selection = firstNewIndex
+                }
+                enrichImages()
+            } catch {
+                guard !Task.isCancelled else { return }
+                moreState = .error(Self.friendlyMessage(for: error))
+                moreTask = nil
+            }
+        }
+    }
+
+    /// Mirrors `RecipeGeneratingView.friendlyMessage(for:)` so the error
+    /// vocabulary stays consistent across the post-capture flow.
+    private static func friendlyMessage(for error: Error) -> String {
+        if let openAI = error as? OpenAIError {
+            switch openAI {
+            case .missingKey:
+                return "OpenAI API key isn't set. Add it to .env and try again."
+            case .transport:
+                return "We couldn't reach OpenAI. Check your connection and try again."
+            case .http(let status, _):
+                return "OpenAI returned an error (status \(status)). Please try again."
+            case .emptyResponse, .decoding, .invalidPayload:
+                return "We couldn't read the response. Please try again."
+            }
+        }
+        return "Something went wrong. Please try again."
     }
 
     // MARK: - Entrance
@@ -328,23 +499,193 @@ private struct ScreenMetrics {
     // `.safeAreaInset` so the pager's height stays deterministic.
 }
 
+// MARK: - Generate More card
+
+/// The three render states of the trailing extension card. Kept at file
+/// scope (rather than nested in `RecipeCardsView`) so `GenerateMoreCard`
+/// — which is a sibling private struct — can name the type directly.
+private enum GenerateMoreState: Equatable {
+    case idle
+    case loading
+    case error(String)
+}
+
+/// The trailing card in the pager that invites the user to keep ideas
+/// coming. Same `surfaceTile2` chassis as `RecipeCard` so the two
+/// belong to the same family; no `RecipeDishImage` because there is
+/// no dish yet — the centered `sparkles` glyph is the placeholder
+/// treatment.
+private struct GenerateMoreCard: View {
+
+    let state: GenerateMoreState
+    let onGenerate: () -> Void
+
+    /// Drives the three-dot pulse during `.loading`. Same cadence as
+    /// `RecipeGeneratingView` so the two surfaces share a loading
+    /// vocabulary.
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+
+            VStack(spacing: AppSpacing.xl) {
+                glyph
+
+                VStack(spacing: AppSpacing.sm) {
+                    Text(headline)
+                        .font(AppTypography.displayMedium)
+                        .tracking(AppTypography.displayMediumTracking)
+                        .foregroundColor(AppColor.bodyOnDark)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(subline)
+                        .font(AppTypography.body)
+                        .tracking(AppTypography.bodyTracking)
+                        .foregroundColor(AppColor.bodyMuted.opacity(0.78))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.85)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, AppSpacing.lg)
+            }
+
+            Spacer(minLength: 0)
+
+            cta
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.bottom, AppSpacing.xl)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+                .fill(AppColor.surfaceTile2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+                .strokeBorder(AppColor.bodyOnDark.opacity(0.06), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(accessibilityLabel))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+    }
+
+    // MARK: - State-driven slots
+
+    @ViewBuilder
+    private var glyph: some View {
+        switch state {
+        case .idle, .error:
+            Image(systemName: "sparkles")
+                .font(.system(size: 56, weight: .regular))
+                .foregroundColor(AppColor.primaryOnDark.opacity(0.85))
+                .accessibilityHidden(true)
+        case .loading:
+            pulsingDots
+        }
+    }
+
+    private var headline: String {
+        switch state {
+        case .idle:    return "More recipes?"
+        case .loading: return "Composing more recipes…"
+        case .error:   return "Something went wrong"
+        }
+    }
+
+    private var subline: String {
+        switch state {
+        case .idle:
+            return "Tap to keep ideas coming — we'll skip what's already here."
+        case .loading:
+            return "Crafting fresh dishes from the same ingredients."
+        case .error(let message):
+            return message
+        }
+    }
+
+    @ViewBuilder
+    private var cta: some View {
+        switch state {
+        case .idle:
+            PrimaryPillButton("Generate More",
+                              icon: "sparkles",
+                              action: onGenerate)
+        case .loading:
+            // No button while a request is in flight — the pulsing dots
+            // above are the affordance. Reserving the CTA height keeps
+            // the card from jumping between states.
+            Color.clear.frame(height: 52)
+        case .error:
+            PrimaryPillButton("Try Again",
+                              icon: "arrow.clockwise",
+                              action: onGenerate)
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch state {
+        case .idle:    return "More recipes. Tap Generate More to add."
+        case .loading: return "Composing more recipes."
+        case .error(let message): return "Generate more failed. \(message)"
+        }
+    }
+
+    // MARK: - Pulsing dots
+
+    private var pulsingDots: some View {
+        HStack(spacing: AppSpacing.sm) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(AppColor.bodyMuted.opacity(0.5))
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(pulse ? 1.0 : 0.55)
+                    .opacity(pulse ? 1.0 : 0.4)
+                    .animation(
+                        .easeInOut(duration: 0.9)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.2),
+                        value: pulse
+                    )
+            }
+        }
+        .frame(height: 56)
+        .accessibilityLabel("Loading")
+    }
+}
+
 // MARK: - Previews
 
 #Preview("RecipeCardsView — default") {
     StatefulPreviewWrapper(NavigationPath()) { path in
-        RecipeCardsView(recipes: Recipe.mocks, path: path)
+        RecipeCardsView(activeIngredients: DetectedIngredient.sampleFridge,
+                        recipes: Recipe.mocks,
+                        path: path)
     }
 }
 
 #Preview("RecipeCardsView — single recipe") {
     StatefulPreviewWrapper(NavigationPath()) { path in
-        RecipeCardsView(recipes: Array(Recipe.mocks.prefix(1)), path: path)
+        RecipeCardsView(activeIngredients: DetectedIngredient.sampleFridge,
+                        recipes: Array(Recipe.mocks.prefix(1)),
+                        path: path)
     }
 }
 
 #Preview("RecipeCardsView — Accessibility XL") {
     StatefulPreviewWrapper(NavigationPath()) { path in
-        RecipeCardsView(recipes: Recipe.mocks, path: path)
+        RecipeCardsView(activeIngredients: DetectedIngredient.sampleFridge,
+                        recipes: Recipe.mocks,
+                        path: path)
     }
     .environment(\.dynamicTypeSize, .accessibility2)
 }

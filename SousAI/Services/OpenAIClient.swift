@@ -5,16 +5,24 @@
 //  Thin URLSession wrapper for the OpenAI Chat Completions API.
 //
 //  Scope:
-//    • One endpoint: POST https://api.openai.com/v1/chat/completions
-//    • One model: gpt-4o-mini (vision-capable, supports JSON-mode, cheap)
-//    • One async helper: `chatCompletion(messages:jsonMode:)` that returns
-//      the raw `content` string from the first choice.
+//    • Two endpoints:
+//        - POST https://api.openai.com/v1/chat/completions
+//        - POST https://api.openai.com/v1/images/generations
+//    • One text model: gpt-4o-mini (vision-capable, supports JSON-mode, cheap)
+//    • One image model: dall-e-2 (cheapest URL-returning image model — the
+//      response URL drops directly into RecipeDishImage's AsyncImage seam
+//      with zero file-system plumbing).
+//    • Two async helpers:
+//        - `chatCompletion(messages:jsonMode:temperature:)` returns the raw
+//          `content` string from the first choice.
+//        - `imageGeneration(prompt:)` returns the generated image's URL.
 //
 //  Why this shape:
-//    • Both call sites (fridge vision, single-emoji text) speak the same
-//      Chat Completions dialect. Centralizing the auth header, request
-//      body shape, decoding, and error mapping keeps the two service
-//      methods small and unit-test-friendly.
+//    • All three call sites (fridge vision, single-emoji text, recipe-text
+//      generation, dish-image generation) speak the OpenAI dialect.
+//      Centralizing the auth header, request body shape, decoding, and
+//      error mapping keeps the per-service methods small and unit-test-
+//      friendly.
 //    • `OpenAIError` is the single error type any service can surface to
 //      the UI. The view never has to know the difference between a
 //      transport failure and a 401.
@@ -120,7 +128,13 @@ final class OpenAIClient {
     static let shared = OpenAIClient()
 
     private let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
+    private let imageEndpoint = URL(string: "https://api.openai.com/v1/images/generations")!
     private let model = "gpt-4o-mini"
+    /// Dall-E 2 is the cheapest URL-returning image model (~$0.02/image at
+    /// 1024x1024) — its response URL lands directly in RecipeDishImage's
+    /// AsyncImage seam, so we avoid the b64 → temp-file plumbing the
+    /// gpt-image-1 / dall-e-3 (-b64) flow would require.
+    private let imageModel = "dall-e-2"
     private let session: URLSession
 
     init(session: URLSession = .shared) {
@@ -193,6 +207,78 @@ final class OpenAIClient {
         return content
     }
 
+    // MARK: - Image generation
+
+    /// Generates a single 1024x1024 image for `prompt` and returns the
+    /// hosted URL of the result. The URL is the OpenAI-issued temporary
+    /// link in the response payload — short-lived (~hours) but plenty for
+    /// our session: the AsyncImage in RecipeDishImage fetches it the
+    /// moment it lands on `imageURL` and the user is already looking at
+    /// the card.
+    ///
+    /// Failures route through the same `OpenAIError` taxonomy as
+    /// `chatCompletion` so the UI layer has one error type to surface.
+    func imageGeneration(prompt: String) async throws -> URL {
+        let key: String
+        do {
+            key = try Secrets.require("OPENAI_API_KEY")
+        } catch {
+            throw OpenAIError.missingKey
+        }
+
+        var request = URLRequest(url: imageEndpoint)
+        request.httpMethod = "POST"
+        // Image generation is slower than chat — 30s budgets feel tight in
+        // practice; 60s is the same as `chatCompletion` for one stable
+        // ceiling across the client.
+        request.timeoutInterval = 60
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+
+        let body = ImageRequestBody(
+            model: imageModel,
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+            response_format: "url"
+        )
+
+        do {
+            request.httpBody = try JSONEncoder().encode(body)
+        } catch {
+            throw OpenAIError.decoding(error)
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw OpenAIError.transport(error)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidPayload("Non-HTTP response.")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let bodyText = String(data: data, encoding: .utf8) ?? ""
+            throw OpenAIError.http(status: http.statusCode, body: bodyText)
+        }
+
+        let decoded: ImageResponse
+        do {
+            decoded = try JSONDecoder().decode(ImageResponse.self, from: data)
+        } catch {
+            throw OpenAIError.decoding(error)
+        }
+
+        guard let urlString = decoded.data.first?.url,
+              let url = URL(string: urlString) else {
+            throw OpenAIError.emptyResponse
+        }
+        return url
+    }
+
     // MARK: - Wire types
 
     private struct RequestBody: Encodable {
@@ -213,6 +299,21 @@ final class OpenAIClient {
         }
         struct Message: Decodable {
             let content: String
+        }
+    }
+
+    private struct ImageRequestBody: Encodable {
+        let model: String
+        let prompt: String
+        let n: Int
+        let size: String
+        let response_format: String
+    }
+
+    private struct ImageResponse: Decodable {
+        let data: [Item]
+        struct Item: Decodable {
+            let url: String?
         }
     }
 }

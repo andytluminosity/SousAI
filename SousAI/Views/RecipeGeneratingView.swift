@@ -2,31 +2,36 @@
 //  RecipeGeneratingView.swift
 //  SousAI
 //
-//  The transitional "AI is composing your recipes" screen.
+//  The "AI is composing your recipes" screen.
 //
 //  This is the calm pause between IngredientSelectionView's commitment
 //  ("Generate Recipes") and the reward moment in RecipeCardsView. It
 //  honors the same motion vocabulary as AnalysisLoadingView so the post-
 //  capture branch of the app feels like one continuous experience —
 //  AmbientBackground canvas, displayMedium headline, three pulsing dots,
-//  a single quiet "Cancel" ghost. The only differences from
-//  AnalysisLoadingView are the copy and the advance destination.
+//  and a graceful failure mode (Try Again + Cancel).
 //
-//  Future OpenAI seam:
-//    • This screen is where the text-completion call will live. The
-//      active ingredient list rides in on the route payload — no extra
-//      plumbing needed. The future implementation will replace the
-//      `advanceTask` body with the real call and push
-//      `.recipeCards(decodedRecipes)` when it resolves.
-//    • Image generation does NOT happen here. The text call returns
-//      each `Recipe.imagePrompt` already populated; RecipeCardsView
-//      fires the per-recipe image calls in parallel as soon as it
-//      mounts, so the user is already swiping while images develop in.
+//  Host of the OpenAI text-completion call:
+//    • The active ingredient list arrives on the route payload — see
+//      IngredientSelectionView.generateRecipes(), which filters the
+//      user's `excluded` selections off before pushing this route.
+//    • `scheduleAdvance` fires `OpenAIRecipeService.generateRecipes`,
+//      which returns `[Recipe]` with `title`, `summary`, `cookTimeMinutes`,
+//      `ingredients`, `emoji`, `imagePrompt`, AND `steps` already
+//      populated. The image-gen call does NOT run here — it runs in
+//      parallel from `RecipeCardsView.onAppear`, so the cards land
+//      immediately with placeholders and the previews develop in.
 //      See the seam diagram in `Recipe.swift`.
 //
-//  Cancel behavior: pops one entry off the stack — back to
+//  Error posture: matches AnalysisLoadingView. The dots are swapped for
+//  a humane error line; the CTA cluster becomes Try Again + Cancel; the
+//  headline flips to "Something went wrong". No alert sheets. Failure
+//  stays inside the same composition the user is already looking at.
+//
+//  Cancel semantics: pops one entry off the stack — back to
 //  IngredientSelectionView, with `excluded` selections intact, so the
-//  user can adjust and retry without losing their pruning.
+//  user can adjust the ingredient list and retry without losing their
+//  pruning.
 //
 
 import SwiftUI
@@ -38,10 +43,7 @@ struct RecipeGeneratingView: View {
 
     @State private var pulse = false
     @State private var advanceTask: Task<Void, Never>?
-
-    /// Stub latency before we land on the cards. Replace with the real
-    /// OpenAI text-completion call's resolution time when wired in.
-    private let stubGenerationDuration: Duration = .milliseconds(2800)
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack {
@@ -51,7 +53,7 @@ struct RecipeGeneratingView: View {
                 Spacer()
 
                 VStack(spacing: AppSpacing.xl) {
-                    Text("Generating recipes…")
+                    Text(headlineText)
                         .font(AppTypography.displayMedium)
                         .tracking(AppTypography.displayMediumTracking)
                         .foregroundColor(AppColor.bodyOnDark)
@@ -60,26 +62,35 @@ struct RecipeGeneratingView: View {
                         .minimumScaleFactor(0.7)
                         .padding(.horizontal, AppSpacing.lg)
 
-                    pulsingDots
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(AppTypography.body)
+                            .tracking(AppTypography.bodyTracking)
+                            .foregroundColor(AppColor.bodyMuted.opacity(0.78))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(4)
+                            .minimumScaleFactor(0.85)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, AppSpacing.lg)
+                    } else {
+                        pulsingDots
 
-                    Text("Crafting personalized meals from your ingredients")
-                        .font(AppTypography.body)
-                        .tracking(AppTypography.bodyTracking)
-                        .foregroundColor(AppColor.bodyMuted.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.85)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, AppSpacing.lg)
+                        Text("Crafting personalized meals from your ingredients")
+                            .font(AppTypography.body)
+                            .tracking(AppTypography.bodyTracking)
+                            .foregroundColor(AppColor.bodyMuted.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.85)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, AppSpacing.lg)
+                    }
                 }
 
                 Spacer()
 
-                SecondaryGhostButton("Cancel") {
-                    advanceTask?.cancel()
-                    if !path.isEmpty { path.removeLast() }
-                }
-                .padding(.bottom, AppSpacing.xl)
+                ctaCluster
+                    .padding(.bottom, AppSpacing.xl)
             }
         }
         .preferredColorScheme(.dark)
@@ -97,22 +108,77 @@ struct RecipeGeneratingView: View {
         }
     }
 
-    // MARK: - Stubbed handoff
+    // MARK: - Headline + CTA
+
+    private var headlineText: String {
+        errorMessage == nil ? "Generating recipes…" : "Something went wrong"
+    }
+
+    @ViewBuilder
+    private var ctaCluster: some View {
+        if errorMessage != nil {
+            VStack(spacing: AppSpacing.sm) {
+                PrimaryPillButton("Try Again",
+                                  icon: "arrow.clockwise",
+                                  action: retry)
+                SecondaryGhostButton("Cancel", action: cancel)
+            }
+        } else {
+            SecondaryGhostButton("Cancel", action: cancel)
+        }
+    }
+
+    // MARK: - Real handoff
 
     private func scheduleAdvance() {
         // Guard against `.onAppear` re-fires (e.g. returning to this screen
         // from a downstream pop). The Task is the single source of truth
-        // for "an advance is pending".
+        // for "a generation is pending".
         guard advanceTask == nil else { return }
 
         advanceTask = Task { @MainActor in
-            try? await Task.sleep(for: stubGenerationDuration)
-            guard !Task.isCancelled else { return }
-            // The real implementation will pass the decoded recipes
-            // produced from `activeIngredients`. For now we hand the
-            // fixture forward so the downstream cards screen has data.
-            path.append(AppRoute.recipeCards(Recipe.mocks))
+            do {
+                let recipes = try await OpenAIRecipeService.shared
+                    .generateRecipes(from: activeIngredients)
+                guard !Task.isCancelled else { return }
+                path.append(AppRoute.recipeCards(activeIngredients, recipes))
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = Self.friendlyMessage(for: error)
+                advanceTask = nil
+            }
         }
+    }
+
+    private func retry() {
+        errorMessage = nil
+        advanceTask?.cancel()
+        advanceTask = nil
+        scheduleAdvance()
+    }
+
+    private func cancel() {
+        advanceTask?.cancel()
+        advanceTask = nil
+        if !path.isEmpty { path.removeLast() }
+    }
+
+    /// Mirrors `AnalysisLoadingView.friendlyMessage(for:)` so the error
+    /// vocabulary stays consistent across the post-capture flow.
+    private static func friendlyMessage(for error: Error) -> String {
+        if let openAI = error as? OpenAIError {
+            switch openAI {
+            case .missingKey:
+                return "OpenAI API key isn't set. Add it to .env and try again."
+            case .transport:
+                return "We couldn't reach OpenAI. Check your connection and try again."
+            case .http(let status, _):
+                return "OpenAI returned an error (status \(status)). Please try again."
+            case .emptyResponse, .decoding, .invalidPayload:
+                return "We couldn't read the response. Please try again."
+            }
+        }
+        return "Something went wrong. Please try again."
     }
 
     private var pulsingDots: some View {

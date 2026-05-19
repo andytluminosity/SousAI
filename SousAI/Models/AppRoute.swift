@@ -47,10 +47,16 @@ enum AppRoute: Hashable {
     case generatingRecipes([DetectedIngredient])
 
     /// The swipeable recipe cards screen — the first "wow moment". Rides
-    /// the `[Recipe]` produced by the loading screen. Each `Recipe` carries
-    /// its `imagePrompt` and, once the future image-gen hook lands, a
-    /// `imageURL` mutated in place by id. See `Recipe.swift` for the seam.
-    case recipeCards([Recipe])
+    /// the original `[DetectedIngredient]` (the active list used to seed
+    /// the text-completion call) alongside the `[Recipe]` produced by the
+    /// loading screen. The active list rides along because the cards
+    /// screen offers a "Generate More" affordance that re-calls the text
+    /// model with the original ingredients plus an exclusion list of
+    /// already-shown titles — see `RecipeCardsView.handleGenerateMore`.
+    /// Each `Recipe` carries its `imagePrompt` and an `imageURL` mutated
+    /// in place by id once the image-gen hook resolves. See `Recipe.swift`
+    /// for the seam.
+    case recipeCards([DetectedIngredient], [Recipe])
 
     /// The guided step-by-step cooking screen. Rides the *single* `Recipe`
     /// the user committed to when they tapped "Start Cooking" on its card

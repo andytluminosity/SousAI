@@ -45,8 +45,9 @@ struct SousAIApp: App {
                     case .generatingRecipes(let active):
                         RecipeGeneratingView(activeIngredients: active,
                                              path: $path)
-                    case .recipeCards(let recipes):
-                        RecipeCardsView(recipes: recipes,
+                    case .recipeCards(let activeIngredients, let recipes):
+                        RecipeCardsView(activeIngredients: activeIngredients,
+                                        recipes: recipes,
                                         path: $path)
                     case .cookingMode(let recipe):
                         CookingModeView(recipe: recipe,

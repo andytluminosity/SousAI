@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -20,54 +20,12 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000030003 /* DesignSystem */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {};
-			explicitFolders = (
-			);
-			path = DesignSystem;
-			sourceTree = "<group>";
-		};
-		AA0000000000000000030004 /* Components */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {};
-			explicitFolders = (
-			);
-			path = Components;
-			sourceTree = "<group>";
-		};
-		AA0000000000000000030005 /* Views */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {};
-			explicitFolders = (
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
-		AA0000000000000000030008 /* Models */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {};
-			explicitFolders = (
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		AA000000000000000003000A /* Services */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {};
-			explicitFolders = (
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
-		AA000000000000000003000B /* Resources */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {};
-			explicitFolders = (
-			);
-			path = Resources;
-			sourceTree = "<group>";
-		};
+		AA0000000000000000030003 /* DesignSystem */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DesignSystem; sourceTree = "<group>"; };
+		AA0000000000000000030004 /* Components */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Components; sourceTree = "<group>"; };
+		AA0000000000000000030005 /* Views */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Views; sourceTree = "<group>"; };
+		AA0000000000000000030008 /* Models */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Models; sourceTree = "<group>"; };
+		AA000000000000000003000A /* Services */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Services; sourceTree = "<group>"; };
+		AA000000000000000003000B /* Resources */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Resources; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,11 +96,11 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				AA0000000000000000030005 /* Views */,
+				AA0000000000000000030003 /* DesignSystem */,
 				AA0000000000000000030004 /* Components */,
+				AA0000000000000000030005 /* Views */,
 				AA0000000000000000030008 /* Models */,
 				AA000000000000000003000A /* Services */,
-				AA0000000000000000030003 /* DesignSystem */,
 				AA000000000000000003000B /* Resources */,
 			);
 			name = SousAI;
@@ -183,6 +141,18 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		AA0000000000000000040003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000001000A /* Preview Assets.xcassets in Resources */,
+				AA0000000000000000010009 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXShellScriptBuildPhase section */
 		AA0000000000000000040004 /* Sync .env into bundle */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -204,18 +174,6 @@
 			shellScript = "# Auto-sync the project-root .env into the bundled resources copy so\n# developers only ever edit one file. The bundled copy is what ships in\n# SousAI.app and is what Secrets.swift reads at runtime.\nset -eu\nSRC=\"${SRCROOT}/.env\"\nDST=\"${SRCROOT}/SousAI/Resources/.env\"\nmkdir -p \"$(dirname \"$DST\")\"\nif [ -f \"$SRC\" ]; then\n  if [ ! -f \"$DST\" ] || ! cmp -s \"$SRC\" \"$DST\"; then\n    cp \"$SRC\" \"$DST\"\n    echo \"note: synced .env -> SousAI/Resources/.env\"\n  fi\nelse\n  echo \"warning: $SRC not found; SousAI/Resources/.env will be used as-is\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
-
-/* Begin PBXResourcesBuildPhase section */
-		AA0000000000000000040003 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				AA000000000000000001000A /* Preview Assets.xcassets in Resources */,
-				AA0000000000000000010009 /* Assets.xcassets in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AA0000000000000000040001 /* Sources */ = {
