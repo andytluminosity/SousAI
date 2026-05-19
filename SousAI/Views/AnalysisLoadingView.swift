@@ -14,7 +14,11 @@
 //      we're no longer in the "photographic capture" context.
 //    • A single quiet question in `displayMedium`, then three pulsing dots
 //      instead of a spinner. Spinners feel transactional; dots feel patient.
-//    • No CTA, no close chip. The user is committed; this screen waits.
+//    • A single quiet "Cancel" affordance — restrained ghost capsule in the
+//      same bottom CTA zone the confirmation view uses, so the layout rhythm
+//      across the flow stays consistent. Tapping it pops the stack one step
+//      back to PhotoConfirmationView (not all the way home), so the user
+//      keeps their captured photo and can simply re-confirm or retake.
 //
 
 import SwiftUI
@@ -22,6 +26,7 @@ import SwiftUI
 struct AnalysisLoadingView: View {
 
     let photo: CapturedPhoto
+    @Binding var path: NavigationPath
 
     @State private var pulse = false
 
@@ -29,17 +34,28 @@ struct AnalysisLoadingView: View {
         ZStack {
             AmbientBackground()
 
-            VStack(spacing: AppSpacing.xl) {
-                Text("Analyzing your fridge…")
-                    .font(AppTypography.displayMedium)
-                    .tracking(AppTypography.displayMediumTracking)
-                    .foregroundColor(AppColor.bodyOnDark)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, AppSpacing.lg)
+            VStack(spacing: 0) {
+                Spacer()
 
-                pulsingDots
+                VStack(spacing: AppSpacing.xl) {
+                    Text("Analyzing your fridge…")
+                        .font(AppTypography.displayMedium)
+                        .tracking(AppTypography.displayMediumTracking)
+                        .foregroundColor(AppColor.bodyOnDark)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, AppSpacing.lg)
+
+                    pulsingDots
+                }
+
+                Spacer()
+
+                SecondaryGhostButton("Cancel") {
+                    if !path.isEmpty { path.removeLast() }
+                }
+                .padding(.bottom, AppSpacing.xl)
             }
         }
         .preferredColorScheme(.dark)
@@ -75,5 +91,21 @@ struct AnalysisLoadingView: View {
 // MARK: - Previews
 
 #Preview("AnalysisLoadingView") {
-    AnalysisLoadingView(photo: CapturedPhoto(image: UIImage()))
+    StatefulPreviewWrapper(NavigationPath()) { path in
+        AnalysisLoadingView(photo: CapturedPhoto(image: UIImage()),
+                            path: path)
+    }
+}
+
+private struct StatefulPreviewWrapper<Value, Content: View>: View {
+    @State private var value: Value
+    private let content: (Binding<Value>) -> Content
+
+    init(_ initialValue: Value,
+         @ViewBuilder content: @escaping (Binding<Value>) -> Content) {
+        self._value = State(initialValue: initialValue)
+        self.content = content
+    }
+
+    var body: some View { content($value) }
 }

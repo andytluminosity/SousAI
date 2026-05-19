@@ -34,7 +34,7 @@ struct SousAIApp: App {
                     case .confirmation(let photo):
                         PhotoConfirmationView(photo: photo, path: $path)
                     case .analyzing(let photo):
-                        AnalysisLoadingView(photo: photo)
+                        AnalysisLoadingView(photo: photo, path: $path)
                     }
                 }
             }
