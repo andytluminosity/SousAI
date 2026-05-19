@@ -350,23 +350,44 @@ struct RecipeCardsView: View {
     /// can be safely re-run after a Generate More append — only the
     /// new recipes get fresh tasks.
     ///
-    /// Errors are intentionally swallowed: the per-card placeholder is
-    /// a perfectly good ship state.
+    /// Errors are intentionally swallowed from the user surface — the
+    /// per-card placeholder is a perfectly good ship state — but in
+    /// DEBUG we log the error to the Xcode console so silent image-gen
+    /// regressions are diagnosable. (Previously, every failure landed
+    /// in a `try?` and the screen quietly stayed on emojis with zero
+    /// signal; the log is the seatbelt for next time.)
     private func enrichImages() {
         for recipe in recipes {
             guard let prompt = recipe.imagePrompt,
                   recipe.imageURL == nil,
                   imageTasks[recipe.id] == nil else { continue }
             let recipeId = recipe.id
+            let recipeTitle = recipe.title
             imageTasks[recipeId] = Task { @MainActor in
-                guard let url = try? await OpenAIRecipeService.shared
-                    .generateImage(forPrompt: prompt) else { return }
-                guard !Task.isCancelled else { return }
-                guard let idx = recipes.firstIndex(where: { $0.id == recipeId }) else {
-                    return
-                }
-                withAnimation(.easeOut(duration: 0.45)) {
-                    recipes[idx].imageURL = url
+                do {
+                    let url = try await OpenAIRecipeService.shared
+                        .generateImage(forPrompt: prompt)
+                    guard !Task.isCancelled else { return }
+                    guard let idx = recipes.firstIndex(where: { $0.id == recipeId }) else {
+                        return
+                    }
+                    withAnimation(.easeOut(duration: 0.45)) {
+                        recipes[idx].imageURL = url
+                    }
+                } catch {
+                    #if DEBUG
+                    // `OpenAIError.http` carries the raw response body
+                    // in an associated value but suppresses it in
+                    // `errorDescription` (the description is what we'd
+                    // surface to users). Pattern-match here so the
+                    // body — which is where OpenAI actually explains
+                    // a 4xx — shows up in the Xcode console.
+                    if case let OpenAIError.http(status, body) = error {
+                        print("SousAI: image generation failed for \"\(recipeTitle)\": status \(status) — body: \(body)")
+                    } else {
+                        print("SousAI: image generation failed for \"\(recipeTitle)\": \(error.localizedDescription)")
+                    }
+                    #endif
                 }
             }
         }

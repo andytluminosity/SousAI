@@ -12,13 +12,16 @@
 //       response straight into `[Recipe]`. UUIDs are minted on the
 //       device — the model doesn't need to invent stable IDs.
 //
-//    2. generateImage(forPrompt:) → URL
-//       Image-generation call. Thin delegate to
-//       `OpenAIClient.imageGeneration` — the per-recipe image-enrichment
-//       hook in RecipeCardsView fires one of these per recipe in
-//       parallel, then writes the resolved URL into
-//       `recipes[i].imageURL` by id. See `Recipe.swift` for the seam
-//       diagram.
+//    2. generateImage(forPrompt:) → URL (local file)
+//       Image-generation call. Asks `OpenAIClient.imageGeneration` for
+//       the decoded PNG bytes (via `b64_json`), writes them to a
+//       uniquely-named file in `FileManager.default.temporaryDirectory`,
+//       and returns the local `file://` URL. The per-recipe image-
+//       enrichment hook in RecipeCardsView fires one of these per
+//       recipe in parallel, then writes the resolved local URL into
+//       `recipes[i].imageURL` by id. `AsyncImage` renders local file
+//       URLs reliably; the OpenAI temporary CDN URLs it would otherwise
+//       hand us did not. See `Recipe.swift` for the seam diagram.
 //
 //  Both methods route through `OpenAIClient` for the auth header,
 //  request shape, and error mapping — this file only owns the prompts
@@ -140,14 +143,67 @@ final class OpenAIRecipeService {
     // MARK: - Image: prompt → URL
 
     /// Generates the dish-preview image for an `imagePrompt` returned by
-    /// the text call above. Returns the hosted URL. Thin delegate — the
-    /// real work lives in `OpenAIClient.imageGeneration`.
+    /// the text call above, persists the bytes to a uniquely-named file
+    /// in the app's temporary directory, and returns the local file URL.
+    ///
+    /// Why we persist instead of returning a remote URL:
+    ///   • `OpenAIClient.imageGeneration` returns the decoded PNG bytes
+    ///     directly (via the `b64_json` response format). The alternative
+    ///     — having OpenAI hand back a temporary signed CDN URL —
+    ///     consistently misbehaves under `AsyncImage`: depending on the
+    ///     blob host the fetch either stalls forever or returns 403 once
+    ///     the signature expires, leaving the dish preview stuck on its
+    ///     emoji placeholder.
+    ///   • A local file URL drops straight into `RecipeDishImage`'s
+    ///     `AsyncImage` and renders deterministically on the first
+    ///     attempt.
+    ///   • Files live in `FileManager.default.temporaryDirectory`, which
+    ///     iOS reclaims as it sees fit — perfectly fine for a session-
+    ///     scoped dish preview that the user will never revisit after
+    ///     the app is killed.
     func generateImage(forPrompt prompt: String) async throws -> URL {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw OpenAIError.invalidPayload("Image prompt was empty.")
         }
-        return try await client.imageGeneration(prompt: trimmed)
+        let imageData = try await client.imageGeneration(prompt: trimmed)
+        return try Self.persistTemporary(imageData: imageData)
+    }
+
+    /// Writes `imageData` to a uniquely-named `.png` file inside a
+    /// dedicated subdirectory of the system temporary directory.
+    /// Creates the subdirectory on first use (idempotent — no-op on
+    /// subsequent calls).
+    ///
+    /// Failures bubble as `OpenAIError.invalidPayload` so the call site
+    /// can surface them through the same error taxonomy as transport
+    /// errors — the user doesn't need to know the difference between
+    /// "OpenAI failed" and "disk failed".
+    private static func persistTemporary(imageData: Data) throws -> URL {
+        let directory = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("SousAI-RecipeImages", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            throw OpenAIError.invalidPayload(
+                "Could not create the image cache directory: \(error.localizedDescription)"
+            )
+        }
+        let fileURL = directory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("png")
+        do {
+            try imageData.write(to: fileURL, options: .atomic)
+        } catch {
+            throw OpenAIError.invalidPayload(
+                "Could not write the image to disk: \(error.localizedDescription)"
+            )
+        }
+        return fileURL
     }
 
     // MARK: - Wire types (private)
