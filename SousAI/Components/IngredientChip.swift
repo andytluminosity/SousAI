@@ -43,32 +43,61 @@ struct IngredientChip: View {
     // MARK: - Inputs
 
     let name: String
+    /// Optional emoji glyph supplied by the AI. When `nil`, the chip
+    /// renders as a clean name-only pill — we never substitute a guessed
+    /// fallback; see Ingredient.swift's "Emoji enrichment seam" comment.
+    let emoji: String?
     let isSelected: Bool
     var onToggle: () -> Void
     var onRemove: () -> Void
+
+    init(name: String,
+         emoji: String? = nil,
+         isSelected: Bool,
+         onToggle: @escaping () -> Void,
+         onRemove: @escaping () -> Void) {
+        self.name = name
+        self.emoji = emoji
+        self.isSelected = isSelected
+        self.onToggle = onToggle
+        self.onRemove = onRemove
+    }
 
     // MARK: - Body
 
     var body: some View {
         Button(action: handleTap) {
-            Text(name)
-                .font(AppTypography.body)
-                .tracking(AppTypography.bodyTracking)
-                .foregroundColor(labelColor)
-                .strikethrough(!isSelected, color: AppColor.bodyMuted.opacity(0.7))
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(fillColor)
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(strokeColor, lineWidth: strokeWidth)
-                )
-                .contentShape(Capsule())
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let emoji {
+                    Text(emoji)
+                        .font(.system(size: 17))
+                        // Emoji glyphs ignore `foregroundColor`, so we
+                        // dim them via opacity on excluded chips to keep
+                        // the muted state visually cohesive with the name.
+                        .opacity(isSelected ? 1.0 : 0.5)
+                        .accessibilityHidden(true)
+                }
+
+                Text(name)
+                    .font(AppTypography.body)
+                    .tracking(AppTypography.bodyTracking)
+                    .strikethrough(!isSelected,
+                                   color: AppColor.bodyMuted.opacity(0.7))
+                    .lineLimit(1)
+            }
+            .foregroundColor(labelColor)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(fillColor)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(strokeColor, lineWidth: strokeWidth)
+            )
+            .contentShape(Capsule())
         }
         .buttonStyle(AppPressStyle())
         .simultaneousGesture(
@@ -126,17 +155,27 @@ struct IngredientChip: View {
 
         VStack(spacing: AppSpacing.lg) {
             IngredientChip(name: "Cherry Tomato",
+                           emoji: "🍅",
                            isSelected: true,
                            onToggle: {},
                            onRemove: {})
 
             IngredientChip(name: "Greek Yogurt",
+                           emoji: "🥛",
                            isSelected: false,
                            onToggle: {},
                            onRemove: {})
 
-            // A long name to verify wrap behavior in the flow layout.
+            // No emoji — stands in for a user-added item pre-enrichment.
+            IngredientChip(name: "Basil",
+                           emoji: nil,
+                           isSelected: true,
+                           onToggle: {},
+                           onRemove: {})
+
+            // A longer name to verify wrap behavior in the flow layout.
             IngredientChip(name: "Aged Sharp Cheddar",
+                           emoji: "🧀",
                            isSelected: true,
                            onToggle: {},
                            onRemove: {})

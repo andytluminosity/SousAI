@@ -181,6 +181,7 @@ struct IngredientSelectionView: View {
             ForEach(ingredients) { item in
                 IngredientChip(
                     name: item.name,
+                    emoji: item.emoji,
                     isSelected: !excluded.contains(item.id),
                     onToggle: { toggle(item) },
                     onRemove: { remove(item) }
@@ -346,8 +347,16 @@ struct IngredientSelectionView: View {
         let feedback = UIImpactFeedbackGenerator(style: .light)
         feedback.impactOccurred()
 
+        // User-added ingredient — `emoji` is intentionally `nil` here.
+        // We do NOT guess client-side: keyword matching produces incorrect
+        // glyphs on typos, composed phrases, and non-English input. The
+        // OpenAI enrichment call (future) will populate `emoji` on this
+        // item in place, matched by `id`. Until then, the chip renders
+        // name-only — which is honest about what we know.
+        let newItem = DetectedIngredient(name: trimmed, emoji: nil)
+
         withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
-            ingredients.append(DetectedIngredient(name: trimmed))
+            ingredients.append(newItem)
             isAddingIngredient = false
             newIngredientText = ""
         }
