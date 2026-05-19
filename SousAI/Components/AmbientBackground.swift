@@ -56,6 +56,13 @@ struct AmbientBackground: View {
                 .offset(x: 40, y: -80)
                 .blendMode(.screen)
         }
+        // Flexible sizing: the view conforms to whatever the parent proposes
+        // instead of broadcasting the 560pt intrinsic size of the warm orb's
+        // .frame(...). Without this, ZStack adopts the largest unflexible
+        // child's size and inflates every ancestor in the layout tree.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Safety net: clip any blurred orb that overshoots the bounds.
+        .clipped()
         .ignoresSafeArea()
         .onAppear { startBreathing() }
     }
