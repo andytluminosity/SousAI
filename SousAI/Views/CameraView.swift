@@ -10,20 +10,38 @@
 //      overlay" rule. Distinct from HomeView's surface-tile-1 hero.
 //    • UI recedes: a single translucent close chip, a quiet eyebrow, a
 //      one-line caption, three bottom controls. Nothing else.
-//    • The "live feed" is mocked by `ViewfinderPlaceholderCanvas` — a soft
-//      warm/cool radial wash that reads as a photographic frame. It will be
-//      replaced 1:1 by an AVCaptureVideoPreviewLayer in a later pass.
-//    • The shutter tap rasterizes that same canvas via SwiftUI's
-//      `ImageRenderer` into a real UIImage, so what the user "captured" is
-//      visually identical to what they were composing.
 //    • Motion is restrained: 0.5s ease-out fade on chrome only; the
 //      viewfinder snaps in instantly so the user can compose.
 //
-//  Future-proofing seams:
-//    • Replace `ViewfinderPlaceholderCanvas` with a UIViewRepresentable that
-//      hosts an AVCaptureVideoPreviewLayer.
-//    • Replace `synthesizeCapture()` with an AVCapturePhotoOutput delegate
-//      callback that hands back a UIImage.
+//  Capture (live):
+//    • `CameraController` owns the `AVCaptureSession`; this screen owns the
+//      controller in `@State` and switches its viewfinder on
+//      `controller.state`. The previous mock — a gradient rasterized by
+//      `synthesizeCapture()` — is gone.
+//    • The viewfinder slot renders `CameraPreviewView` when the session is
+//      running and `ViewfinderPlaceholderCanvas` in every other state.
+//      That keeps this screen's composition previewable on a Mac, where
+//      no capture device exists, and gives permission-denied a home that
+//      isn't a modal alert (consistent with AnalysisLoadingView, which
+//      also keeps failure inside the composition the user is looking at).
+//    • The shutter is armed only in `.running`. When there is no camera
+//      the caption steers to the photo-library button instead, which
+//      still feeds a real photo into the vision call — so the Simulator
+//      can exercise the whole AI pipeline.
+//
+//  Lifecycle:
+//    • `.task` prepares the session on appear. `prepare()` is idempotent,
+//      so returning to this screen restarts rather than reconfigures.
+//    • `.onDisappear` and a `scenePhase` watcher stop the session, so the
+//      camera indicator goes out and the device stops burning power the
+//      moment the screen is left or the app is backgrounded.
+//
+//  Orientation:
+//    • Portrait-locked while on screen (see `PortraitLock` below). The
+//      preview connection and the still capture are both hard-pinned to
+//      `CameraController.portraitRotationAngle`, so letting the UI rotate
+//      underneath them would show a sideways feed. The rest of the app
+//      keeps its declared landscape support.
 //
 
 import SwiftUI
@@ -36,11 +54,19 @@ struct CameraView: View {
 
     @Binding var path: NavigationPath
 
+    // MARK: - Capture
+
+    @State private var controller = CameraController()
+
     // MARK: - Local state
+
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var chromeVisible = false
     @State private var flashOpacity: Double = 0
     @State private var pickerItem: PhotosPickerItem?
+    @State private var isCapturing = false
+    @State private var captureError: String?
 
     // MARK: - Body
 
@@ -76,8 +102,25 @@ struct CameraView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            PortraitLock.engage()
             withAnimation(.easeOut(duration: 0.5)) {
                 chromeVisible = true
+            }
+        }
+        .task {
+            await controller.prepare()
+        }
+        .onDisappear {
+            controller.stop()
+            PortraitLock.release()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Backgrounding must release the camera; foregrounding brings
+            // it back without re-prompting or reconfiguring.
+            switch phase {
+            case .active:   controller.start()
+            case .inactive, .background: controller.stop()
+            @unknown default: break
             }
         }
         .onChange(of: pickerItem) { _, newItem in
@@ -115,8 +158,18 @@ struct CameraView: View {
     private var viewfinder: some View {
         VStack(spacing: AppSpacing.lg) {
             ZStack {
-                ViewfinderPlaceholderCanvas()
-                    .clipped()
+                // The live feed when there is one; the placeholder wash
+                // otherwise. Both sit under the same corner marks so the
+                // frame reads identically in every state.
+                if controller.state == .running {
+                    CameraPreviewView(session: controller.session)
+                        .clipped()
+                        .transition(.opacity)
+                } else {
+                    ViewfinderPlaceholderCanvas()
+                        .clipped()
+                        .transition(.opacity)
+                }
 
                 ViewfinderFrame(armLength: 28)
                     .stroke(AppColor.bodyOnDark.opacity(0.35),
@@ -124,14 +177,51 @@ struct CameraView: View {
             }
             .aspectRatio(3.0 / 4.0, contentMode: .fit)
             .frame(maxWidth: .infinity)
+            .animation(.easeOut(duration: 0.35), value: controller.state)
 
-            Text("Center your open fridge in the frame.")
+            captionStack
+        }
+    }
+
+    /// The single line beneath the frame, plus the one affordance that
+    /// only permission-denied needs. Everything the user is told about
+    /// camera state lives here — no alerts, no sheets.
+    private var captionStack: some View {
+        VStack(spacing: AppSpacing.sm) {
+            Text(captionText)
                 .font(AppTypography.caption)
                 .tracking(AppTypography.captionTracking)
                 .foregroundColor(AppColor.bodyMuted.opacity(0.6))
                 .multilineTextAlignment(.center)
-                .lineLimit(1)
+                .lineLimit(2)
                 .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if controller.state == .permissionDenied {
+                SecondaryGhostButton("Open Settings") {
+                    PortraitLock.openSettings()
+                }
+            }
+        }
+    }
+
+    /// Caption copy per capture state. `captureError` takes precedence —
+    /// a failed shutter is the most recent thing the user did, so it's
+    /// the most relevant thing to tell them.
+    private var captionText: String {
+        if let captureError { return captureError }
+
+        switch controller.state {
+        case .running:
+            return "Center your open fridge in the frame."
+        case .idle, .preparing:
+            return "Starting the camera…"
+        case .unavailable:
+            return "No camera here — pick a photo from your library instead."
+        case .permissionDenied:
+            return "SousAI needs camera access to scan your fridge. You can also pick a photo from your library."
+        case .failed(let message):
+            return message
         }
     }
 
@@ -171,6 +261,8 @@ struct CameraView: View {
         }
     }
 
+    /// Dims and disables itself outside `.running`, so the only tappable
+    /// path when there is no camera is the library button.
     private var shutterButton: some View {
         Button(action: handleShutter) {
             ZStack {
@@ -185,39 +277,44 @@ struct CameraView: View {
             .contentShape(Circle())
         }
         .buttonStyle(AppPressStyle())
+        .disabled(!controller.canCapture || isCapturing)
+        .opacity(controller.canCapture ? 1 : 0.35)
+        .animation(.easeOut(duration: 0.25), value: controller.canCapture)
         .accessibilityLabel("Capture photo")
     }
 
     // MARK: - Capture
 
     private func handleShutter() {
+        guard controller.canCapture, !isCapturing else { return }
+        isCapturing = true
+        captureError = nil
+
         let feedback = UIImpactFeedbackGenerator(style: .heavy)
         feedback.impactOccurred()
 
-        // Cinematic shutter flash.
+        // Cinematic shutter flash. Fires immediately on tap rather than
+        // on the photo callback — the flash is feedback for the *tap*,
+        // and waiting for AVFoundation would make it feel laggy.
         withAnimation(.easeOut(duration: 0.08)) {
             flashOpacity = 0.6
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
-            withAnimation(.easeOut(duration: 0.18)) {
-                flashOpacity = 0
+        withAnimation(.easeOut(duration: 0.18).delay(0.10)) {
+            flashOpacity = 0
+        }
+
+        Task { @MainActor in
+            defer { isCapturing = false }
+            do {
+                let image = try await controller.capturePhoto()
+                path.append(AppRoute.confirmation(CapturedPhoto(image: image)))
+            } catch {
+                captureError = "That shot didn't take. Try again."
+                #if DEBUG
+                print("SousAI: photo capture failed: \(error.localizedDescription)")
+                #endif
             }
         }
-
-        // Rasterize the placeholder canvas into a real UIImage. This is the
-        // exact site that swaps for AVCapturePhotoOutput later.
-        guard let captured = synthesizeCapture() else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-            path.append(AppRoute.confirmation(CapturedPhoto(image: captured)))
-        }
-    }
-
-    private func synthesizeCapture() -> UIImage? {
-        let canvas = ViewfinderPlaceholderCanvas()
-            .frame(width: 1024, height: 1365)
-        let renderer = ImageRenderer(content: canvas)
-        renderer.scale = UIScreen.main.scale
-        return renderer.uiImage
     }
 
     @MainActor
@@ -231,44 +328,38 @@ struct CameraView: View {
     }
 }
 
-// MARK: - Viewfinder placeholder canvas
+// MARK: - Portrait lock
 
-/// The visual stand-in for a live camera feed.
+/// Pins the interface to portrait for the lifetime of the capture screen.
 ///
-/// A warm fill light and a cool rim light wash over `surfaceTile1` to mimic
-/// the soft, photographic feel of an out-of-focus frame. Used both inside
-/// the live viewfinder *and* rasterized into the captured `UIImage` — so the
-/// captured "photo" matches what the user composed.
-struct ViewfinderPlaceholderCanvas: View {
-    var body: some View {
-        ZStack {
-            AppColor.surfaceTile1
+/// Both the preview connection and the still capture are hard-pinned to
+/// `CameraController.portraitRotationAngle`, so allowing the UI to rotate
+/// underneath them would show a sideways feed. Locking the screen is the
+/// cheap half of that trade — the alternative is tracking rotation with an
+/// `AVCaptureDevice.RotationCoordinator` and reflowing a 3:4 viewfinder
+/// into landscape.
+///
+/// `requestGeometryUpdate` is the supported iOS 16+ mechanism. The older
+/// trick — setting `UIDevice.orientation` by KVC — is private API and gets
+/// apps rejected. Requests are intersected with the Info.plist orientation
+/// set, so `release()` can ask for `.all` and let the system clamp it back
+/// to whatever the app actually declares.
+private enum PortraitLock {
 
-            Circle()
-                .fill(Color(red: 1.00, green: 0.78, blue: 0.55))
-                .blur(radius: 140)
-                .opacity(0.18)
-                .scaleEffect(1.4)
-                .offset(x: -120, y: -180)
-                .blendMode(.screen)
+    static func engage() { request(.portrait) }
 
-            Circle()
-                .fill(Color(red: 0.55, green: 0.72, blue: 1.00))
-                .blur(radius: 130)
-                .opacity(0.12)
-                .scaleEffect(1.2)
-                .offset(x: 140, y: 220)
-                .blendMode(.screen)
+    static func release() { request(.all) }
 
-            Circle()
-                .fill(Color.white)
-                .blur(radius: 110)
-                .opacity(0.05)
-                .scaleEffect(0.6)
-                .offset(x: 30, y: -60)
-                .blendMode(.screen)
-        }
-        .clipped()
+    static func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private static func request(_ orientations: UIInterfaceOrientationMask) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations))
     }
 }
 

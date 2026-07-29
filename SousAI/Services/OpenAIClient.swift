@@ -148,8 +148,31 @@ final class OpenAIClient {
     private let imageModel = "dall-e-3"
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
+    /// Resolves the bearer token for each request.
+    ///
+    /// Injectable for the same reason `session` is: without it, every test
+    /// of this client depends on a bundled `.env` existing on the machine
+    /// running the tests (it's gitignored, so on most machines it does
+    /// not), and the `.missingKey` branch is unreachable from a test.
+    private let apiKeyProvider: () throws -> String
+
+    init(session: URLSession = .shared,
+         apiKeyProvider: @escaping () throws -> String = {
+             try Secrets.require("OPENAI_API_KEY")
+         }) {
         self.session = session
+        self.apiKeyProvider = apiKeyProvider
+    }
+
+    /// Collapses any secrets-loading failure into `.missingKey` — the view
+    /// layer treats "no .env", "key absent", and "still the placeholder"
+    /// identically, because the fix is the same for all three.
+    private func resolveAPIKey() throws -> String {
+        do {
+            return try apiKeyProvider()
+        } catch {
+            throw OpenAIError.missingKey
+        }
     }
 
     /// Sends a Chat Completion request and returns the `content` of the
@@ -160,12 +183,7 @@ final class OpenAIClient {
     func chatCompletion(messages: [OpenAIChatMessage],
                         jsonMode: Bool = false,
                         temperature: Double = 0.2) async throws -> String {
-        let key: String
-        do {
-            key = try Secrets.require("OPENAI_API_KEY")
-        } catch {
-            throw OpenAIError.missingKey
-        }
+        let key = try resolveAPIKey()
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -236,12 +254,7 @@ final class OpenAIClient {
     /// Failures route through the same `OpenAIError` taxonomy as
     /// `chatCompletion` so the UI layer has one error type to surface.
     func imageGeneration(prompt: String) async throws -> Data {
-        let key: String
-        do {
-            key = try Secrets.require("OPENAI_API_KEY")
-        } catch {
-            throw OpenAIError.missingKey
-        }
+        let key = try resolveAPIKey()
 
         var request = URLRequest(url: imageEndpoint)
         request.httpMethod = "POST"

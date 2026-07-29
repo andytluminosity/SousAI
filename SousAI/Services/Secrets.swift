@@ -113,9 +113,21 @@ enum Secrets {
     /// optional surrounding single or double quotes around the value.
     /// Deliberately small — we do not need shell-style interpolation
     /// for an app that holds exactly one secret.
-    private static func parse(_ source: String) -> [String: String] {
+    ///
+    /// Internal rather than private so `SecretsParseTests` can exercise it
+    /// directly. The alternative — testing through `require(_:)` — would
+    /// read the *test* bundle's `.env`, which doesn't exist, so the parse
+    /// itself would never run.
+    static func parse(_ source: String) -> [String: String] {
         var out: [String: String] = [:]
-        for rawLine in source.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+        // `\.isNewline` rather than comparing against "\n" / "\r"
+        // individually: Swift treats CRLF as ONE `Character` (a single
+        // grapheme cluster) that equals neither, so the explicit comparison
+        // silently failed to split a `.env` saved with Windows line endings
+        // — the whole file parsed as one line, and every key but the first
+        // went missing. `isNewline` is true for the CRLF cluster as well as
+        // for LF, CR, and the Unicode line/paragraph separators.
+        for rawLine in source.split(whereSeparator: \.isNewline) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty, !line.hasPrefix("#") else { continue }
             guard let eq = line.firstIndex(of: "=") else { continue }
