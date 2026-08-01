@@ -4,7 +4,7 @@
 
 Ever opened a full fridge and still had no idea what to make? Most recipe apps make you pick a dish first, then send you to the store for the three things you don't have. SousAI works the other way around. Take one photo of your fridge, and it tells you what you can cook right now. It then walks you through cooking it, step by step, and helps you out when something goes wrong. Built with SwiftUI for the interface, and OpenAI's GPT-4o-mini and DALL·E 3 for the intelligence.
 
-SousAI is a native iOS app. For a full technical breakdown — architecture diagrams, the concurrency model, and how the tests are wired — see [ARCHITECTURE.md](ARCHITECTURE.md).
+SousAI is a native iOS app. For a full technical breakdown, architecture diagrams, the concurrency model, and how the tests are wired, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Features
 
